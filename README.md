@@ -59,7 +59,7 @@ pnpm install
 pnpm dev
 ```
 
-客户端将在 `http://localhost:5173` 启动。
+客户端将在 `http://localhost:5174` 启动。
 
 ## 📡 WebSocket 协议
 

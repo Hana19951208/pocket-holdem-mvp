@@ -46,7 +46,6 @@ trigger: always_on
 > ❌ npm install, yarn add
 
 1. 语言环境：记住请将你所有思考以及生成过程，使用中文来回答
-2. python 环境优先使用D:\tools\development_tools\miniconda3\来验证，不用使用系统自带的python或python3，请激活conda activate base环境
+2. python 环境优先使用/opt/anaconda3来验证，不用使用系统自带的python或python3，请激活conda activate base环境
 3. 记住你的每次回答，需要检查是否要保持同步 reademe 文件.
 4. 当你使用github进行提交msg/tag时，默认使用中文描述
-5. 我的本地终端默认使用的是PowerShell终端，后续提供命令要遵循PowerShell终端的语法规则
