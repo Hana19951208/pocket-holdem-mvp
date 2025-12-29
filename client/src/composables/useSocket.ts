@@ -16,7 +16,8 @@ import {
 } from '../types';
 
 // 服务器地址（开发环境）
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+// 为支持 ngrok 穿透，默认使用空字符串以利用 Vite Proxy 代理到后端
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || '';
 
 /**
  * Socket 连接状态
@@ -38,12 +39,30 @@ export const useSocket = () => {
     // 我的手牌
     const myCards = ref<Card[]>([]);
 
+    // 当前回合超时时间戳 (用于倒计时 UI)
+    const turnTimeout = ref<number>(0);
+
+    // 手牌结算结果 (用于 Showdown UI)
+    const handResult = ref<{
+        winners: { playerId: string; amount: number; handRank?: string; cards?: Card[] }[];
+        pots: { amount: number; eligiblePlayerIds: string[] }[];
+        showdownCards: { playerId: string; cards: Card[] }[];
+    } | null>(null);
+
+    // 是否处于 Showdown 展示阶段
+    const isShowdown = ref(false);
+
+    // 是否被踢出房间
+    const isKicked = ref(false);
+    const kickReason = ref<string>('');
+
     // 错误信息
     const error = ref<string | null>(null);
 
     // 本地存储的 key
     const PLAYER_ID_KEY = 'pocket_holdem_player_id';
     const ROOM_ID_KEY = 'pocket_holdem_room_id';
+
 
     /**
      * 建立连接
@@ -157,9 +176,13 @@ export const useSocket = () => {
             room.value = data.room;
         });
 
-        // 游戏开始
+        // 游戏开始 - 核心修复：重置 Showdown 状态
         socket.value.on(ServerEvent.GAME_STARTED, (data: { room: PublicRoomInfo }) => {
             room.value = data.room;
+            // 新一局开始，清除旧的 Showdown 状态（关键！）
+            isShowdown.value = false;
+            handResult.value = null;
+            console.log('[Socket] 新一局开始，Showdown 状态已重置');
         });
 
         // 发牌（仅自己的手牌）
@@ -173,10 +196,49 @@ export const useSocket = () => {
             room: PublicRoomInfo;
             myCards?: Card[];
         }) => {
-            room.value = data.room;
-            if (data.myCards) {
+            // 强制替换整个对象，确保 Vue 响应式触发
+            room.value = JSON.parse(JSON.stringify(data.room));
+            // 仅当明确有新手牌时才更新，不清除已有手牌
+            if (data.myCards && data.myCards.length > 0) {
                 myCards.value = data.myCards;
             }
+            // 新局开始，隐藏 Showdown
+            isShowdown.value = false;
+            handResult.value = null;
+        });
+
+        // 玩家已行动（核心：修复行动面板不隐藏问题）
+        socket.value.on(ServerEvent.PLAYER_ACTED, (data: { room: PublicRoomInfo }) => {
+            // 强制深拷贝替换，确保 computed 属性重新计算
+            room.value = JSON.parse(JSON.stringify(data.room));
+            console.log('[Socket] 玩家已行动，状态已更新, stateVersion:', data.room.gameState?.stateVersion);
+        });
+
+        // 轮到玩家行动（携带超时时间戳）
+        socket.value.on(ServerEvent.PLAYER_TURN, (data: { playerIndex: number; timeout: number; stateVersion: number }) => {
+            turnTimeout.value = data.timeout;
+            console.log('[Socket] 轮到玩家行动:', data.playerIndex, '超时时间:', new Date(data.timeout).toLocaleTimeString());
+        });
+
+        // 手牌结算结果（Showdown）
+        socket.value.on(ServerEvent.HAND_RESULT, (data: {
+            winners: { playerId: string; amount: number; handRank?: string; cards?: Card[] }[];
+            pots: { amount: number; eligiblePlayerIds: string[] }[];
+            showdownCards: { playerId: string; cards: Card[] }[];
+        }) => {
+            handResult.value = data;
+            isShowdown.value = true;
+            console.log('[Socket] 收到手牌结果:', data.winners.map(w => w.playerId).join(', '));
+        });
+
+        // 准备状态变更（新增）
+        socket.value.on(ServerEvent.READY_STATE_CHANGED, (data: {
+            room: PublicRoomInfo;
+            playerId: string;
+            isReady: boolean;
+        }) => {
+            room.value = JSON.parse(JSON.stringify(data.room));
+            console.log(`[Socket] 玩家准备状态变更: ${data.playerId} -> ${data.isReady ? '已准备' : '未准备'}`);
         });
 
         // 重连成功
@@ -195,6 +257,16 @@ export const useSocket = () => {
         socket.value.on(ServerEvent.ERROR, (data: { code: string; message: string }) => {
             error.value = data.message;
             console.error('[Socket] 服务器错误:', data);
+        });
+
+        // 被踢出房间处理
+        socket.value.on(ServerEvent.PLAYER_KICKED, (data: { reason: string }) => {
+            isKicked.value = true;
+            kickReason.value = data.reason;
+            clearSession();
+            room.value = null;
+            myCards.value = [];
+            console.log('[Socket] 您已被踢出房间:', data.reason);
         });
     };
 
@@ -281,6 +353,13 @@ export const useSocket = () => {
     };
 
     /**
+     * 玩家准备就绪（新增）
+     */
+    const playerReady = () => {
+        socket.value?.emit(ClientEvent.PLAYER_READY);
+    };
+
+    /**
      * 玩家操作
      */
     const playerAction = (action: ActionType, amount?: number) => {
@@ -327,6 +406,13 @@ export const useSocket = () => {
         room,
         myCards,
         error,
+        // 新增：倒计时与 Showdown 状态
+        turnTimeout,
+        handResult,
+        isShowdown,
+        // 新增：被踢出状态
+        isKicked,
+        kickReason,
 
         // 方法
         connect,
@@ -337,6 +423,7 @@ export const useSocket = () => {
         standUp,
         startGame,
         playerAction,
+        playerReady,  // 新增
         kickPlayer,
         leaveRoom,
         clearSession

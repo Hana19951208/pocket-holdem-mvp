@@ -25,12 +25,14 @@ export class Player implements IPlayer {
     chips: number;
     status: PlayerStatus;
     currentBet: number;
+    totalBetThisHand: number;  // 新增：这手牌累计投入
     isDealer: boolean;
     isCurrentTurn: boolean;
     hasActed: boolean;
     isFolded: boolean;
     isAllIn: boolean;
     isHost: boolean;
+    isReady: boolean;  // 新增：玩家是否准备就绪
     holeCards: Card[];
     socketId: string | null;
     lastActionTime: number;
@@ -48,12 +50,14 @@ export class Player implements IPlayer {
         this.chips = options.chips;
         this.status = PlayerStatus.SPECTATING;
         this.currentBet = 0;
+        this.totalBetThisHand = 0;  // 新增：初始化为 0
         this.isDealer = false;
         this.isCurrentTurn = false;
         this.hasActed = false;
         this.isFolded = false;
         this.isAllIn = false;
         this.isHost = options.isHost ?? false;
+        this.isReady = false;  // 新增：默认未准备
         this.holeCards = [];
         this.socketId = options.socketId ?? null;
         this.lastActionTime = Date.now();
@@ -72,6 +76,7 @@ export class Player implements IPlayer {
         const actualAmount = Math.min(amount, this.chips);
         this.chips -= actualAmount;
         this.currentBet += actualAmount;
+        this.totalBetThisHand += actualAmount;  // 新增：累加到整手牌投入
 
         // 检查是否 All-in
         if (this.chips === 0 && this.status === PlayerStatus.ACTIVE) {
@@ -143,11 +148,13 @@ export class Player implements IPlayer {
     resetForNewHand(): void {
         this.holeCards = [];
         this.currentBet = 0;
+        this.totalBetThisHand = 0;  // 新增：重置累计投入
         this.isDealer = false;
         this.isCurrentTurn = false;
         this.hasActed = false;
         this.isFolded = false;
         this.isAllIn = false;
+        this.isReady = false;  // 新增：每局重置准备状态
 
         // 状态转换：如果有筹码且在座位上，变为 ACTIVE；否则保持淘汰/观战状态
         if (this.seatIndex !== null) {
@@ -263,7 +270,8 @@ export class Player implements IPlayer {
             hasActed: this.hasActed,
             isFolded: this.isFolded,
             isAllIn: this.isAllIn,
-            isHost: this.isHost
+            isHost: this.isHost,
+            isReady: this.isReady  // 新增
         };
     }
 

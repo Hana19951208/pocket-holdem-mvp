@@ -73,6 +73,7 @@ export interface PublicPlayerInfo {
     isFolded: boolean;           // 是否已弃牌（冗余字段，方便前端）
     isAllIn: boolean;            // 是否已全押
     isHost: boolean;             // 是否为房主
+    isReady: boolean;            // 新增：玩家是否准备就绪
 }
 
 /** 玩家信息（服务端完整版，含手牌） */
@@ -156,7 +157,6 @@ export interface Room extends Omit<PublicRoomInfo, 'players' | 'gameState'> {
 // WebSocket 事件协议定义
 // ========================================
 
-/** 客户端发送的事件 */
 export enum ClientEvent {
     JOIN_ROOM = 'JOIN_ROOM',           // 加入房间
     CREATE_ROOM = 'CREATE_ROOM',       // 创建房间
@@ -164,6 +164,7 @@ export enum ClientEvent {
     STAND_UP = 'STAND_UP',             // 站起观战
     START_GAME = 'START_GAME',         // 开始游戏
     PLAYER_ACTION = 'PLAYER_ACTION',   // 玩家操作
+    PLAYER_READY = 'PLAYER_READY',     // 新增：玩家准备就绪
     RECONNECT = 'RECONNECT',           // 断线重连
     LEAVE_ROOM = 'LEAVE_ROOM',         // 离开房间
     KICK_PLAYER = 'KICK_PLAYER'        // 踢出玩家（房主）
@@ -178,6 +179,7 @@ export enum ServerEvent {
     PLAYER_LEFT = 'PLAYER_LEFT',       // 玩家离开
     PLAYER_SAT = 'PLAYER_SAT',         // 玩家入座
     PLAYER_STOOD = 'PLAYER_STOOD',     // 玩家站起
+    PLAYER_KICKED = 'PLAYER_KICKED',   // 新增：玩家被踢出
     GAME_STARTED = 'GAME_STARTED',     // 游戏开始
     SYNC_STATE = 'SYNC_STATE',         // 状态同步
     DEAL_CARDS = 'DEAL_CARDS',         // 发牌（仅发给自己的手牌）
@@ -185,6 +187,7 @@ export enum ServerEvent {
     PLAYER_ACTED = 'PLAYER_ACTED',     // 玩家已行动
     HAND_RESULT = 'HAND_RESULT',       // 本局结果
     GAME_ENDED = 'GAME_ENDED',         // 游戏结束
+    READY_STATE_CHANGED = 'READY_STATE_CHANGED',  // 新增：准备状态变更
     ERROR = 'ERROR',                   // 错误消息
     RECONNECTED = 'RECONNECTED'        // 重连成功
 }

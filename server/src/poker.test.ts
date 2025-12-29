@@ -197,15 +197,15 @@ describe('边池计算', () => {
         ];
 
         players[0].seatIndex = 0;
-        players[0].currentBet = 50;
+        players[0].totalBetThisHand = 50;
         players[0].status = PlayerStatus.ALL_IN;
 
         players[1].seatIndex = 1;
-        players[1].currentBet = 100;
+        players[1].totalBetThisHand = 100;
         players[1].status = PlayerStatus.ACTIVE;
 
         players[2].seatIndex = 2;
-        players[2].currentBet = 100;
+        players[2].totalBetThisHand = 100;
         players[2].status = PlayerStatus.ACTIVE;
 
         const pots = PokerEngine.calculateSidePots(players);
@@ -224,19 +224,19 @@ describe('边池计算', () => {
         ];
 
         players[0].seatIndex = 0;
-        players[0].currentBet = 50;
+        players[0].totalBetThisHand = 50;
         players[0].status = PlayerStatus.ALL_IN;
 
         players[1].seatIndex = 1;
-        players[1].currentBet = 100;
+        players[1].totalBetThisHand = 100;
         players[1].status = PlayerStatus.ACTIVE;
 
         players[2].seatIndex = 2;
-        players[2].currentBet = 200;
+        players[2].totalBetThisHand = 200;
         players[2].status = PlayerStatus.ACTIVE;
 
         players[3].seatIndex = 3;
-        players[3].currentBet = 200;
+        players[3].totalBetThisHand = 200;
         players[3].isFolded = true;
         players[3].status = PlayerStatus.FOLDED;
 

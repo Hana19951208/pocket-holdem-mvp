@@ -222,8 +222,8 @@ export class PokerEngine {
      * @returns 底池列表（主池 + 边池）
      */
     static calculateSidePots(players: Player[]): Pot[] {
-        // 获取所有有投入的玩家
-        const playersWithBets = players.filter(p => p.currentBet > 0);
+        // 获取所有有投入的玩家（修改：使用 totalBetThisHand 替代 currentBet）
+        const playersWithBets = players.filter(p => p.totalBetThisHand > 0);
 
         if (playersWithBets.length === 0) {
             return [];
@@ -231,14 +231,14 @@ export class PokerEngine {
 
         // 按投入额排序（从小到大）
         const sortedPlayers = [...playersWithBets].sort(
-            (a, b) => a.currentBet - b.currentBet
+            (a, b) => a.totalBetThisHand - b.totalBetThisHand
         );
 
         const pots: Pot[] = [];
         let prevBet = 0;
 
         for (let i = 0; i < sortedPlayers.length; i++) {
-            const currentBet = sortedPlayers[i].currentBet;
+            const currentBet = sortedPlayers[i].totalBetThisHand;
             const betDiff = currentBet - prevBet;
 
             if (betDiff > 0) {

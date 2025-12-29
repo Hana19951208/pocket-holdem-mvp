@@ -1,10 +1,11 @@
 {
     "name": "pocket-holdem-server",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "德州扑克朋友局系统 - 服务端",
     "main": "dist/index.js",
     "scripts": {
         "dev": "tsx watch src/index.ts",
+        "debug": "DEBUG=* tsx watch src/index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
         "typecheck": "tsc --noEmit",

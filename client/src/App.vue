@@ -7,7 +7,7 @@
  * - room: 房间（座位、准备）
  * - game: 游戏（对局）
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { useSocket } from './composables/useSocket';
 import { ActionType, type Card, getCardDisplay, formatChips, GamePhase } from './types';
 
@@ -19,11 +19,17 @@ const {
   myPlayerId, 
   myCards, 
   error,
+  // 新增：倒计时与 Showdown 状态
+  turnTimeout,
+  handResult,
+  isShowdown,
   createRoom, 
   joinRoom, 
   sitDown, 
   startGame, 
-  playerAction, 
+  playerAction,
+  playerReady,  // 新增
+  kickPlayer,
   leaveRoom 
 } = useSocket();
 
@@ -37,6 +43,37 @@ const showJoinForm = ref(false);
 
 // 加注输入
 const raiseAmount = ref(0);
+
+// 倒计时状态
+const remainingSeconds = ref(0);
+let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+// 监听 turnTimeout 变化，启动倒计时
+watch(() => turnTimeout.value, (newTimeout) => {
+  // 清理旧的定时器
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+  
+  if (!newTimeout || newTimeout <= 0) {
+    remainingSeconds.value = 0;
+    return;
+  }
+  
+  // 启动新的倒计时
+  const updateCountdown = () => {
+    const now = Date.now();
+    remainingSeconds.value = Math.max(0, Math.ceil((newTimeout - now) / 1000));
+    if (remainingSeconds.value <= 0 && countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+  };
+  
+  updateCountdown();
+  countdownInterval = setInterval(updateCountdown, 100);
+}, { immediate: true });
 
 // ========================================
 // 计算属性
@@ -218,6 +255,69 @@ const getPlayerAtSeat = (seatIndex: number) => {
 const displayCard = (card: Card) => {
   return getCardDisplay(card);
 };
+
+// 获取玩家昵称（用于 Showdown 展示）
+const getPlayerNickname = (playerId: string) => {
+  const player = room.value?.players.find(p => p.id === playerId);
+  return player?.nickname || '未知玩家';
+};
+
+// 关闭 Showdown 弹窗（新增）
+const closeShowdown = () => {
+  isShowdown.value = false;
+  // 自动发送 Ready
+  playerReady();
+};
+
+// 判断游戏是否结束（等待准备中）（新增）
+const isGameEnded = computed(() => {
+  return room.value?.gameState?.phase === GamePhase.IDLE && !room.value?.isPlaying;
+});
+
+// 我的 Ready 状态（新增）
+const myReadyStatus = computed(() => {
+  return myPlayer.value?.isReady ?? false;
+});
+
+// 所有入座玩家是否都准备好（新增）
+const allPlayersReady = computed(() => {
+  if (!room.value) return false;
+  const seatedPlayers = room.value.players.filter(p => p.seatIndex !== null);
+  return seatedPlayers.length >= 2 && seatedPlayers.every(p => p.isReady);
+});
+
+// 所有非房主玩家是否都准备好（房间页用，房主不需要准备）
+const allSeatedPlayersReadyExceptHost = computed(() => {
+  if (!room.value) return false;
+  const seatedPlayers = room.value.players.filter(p => p.seatIndex !== null);
+  if (seatedPlayers.length < 2) return false;
+  // 房主不检查 Ready，其他人都要 Ready
+  const nonHostSeated = seatedPlayers.filter(p => !p.isHost);
+  return nonHostSeated.every(p => p.isReady);
+});
+
+// 处理 Ready 按钮点击（新增）
+const handleReady = () => {
+  playerReady();
+};
+
+// Debug 面板状态（新增）
+const showDebugPanel = ref(false);
+
+// 清理本地数据（新增）
+const clearLocalData = () => {
+  localStorage.clear();
+  sessionStorage.clear();
+  alert('已清理本地存储，请刷新页面');
+  window.location.reload();
+};
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+  }
+});
 </script>
 
 <template>
@@ -307,6 +407,15 @@ const displayCard = (card: Card) => {
               <span class="player-name">{{ getPlayerAtSeat(seatIdx - 1)?.nickname }}</span>
               <span class="player-chips">{{ formatChips(getPlayerAtSeat(seatIdx - 1)?.chips || 0) }}</span>
               <span v-if="getPlayerAtSeat(seatIdx - 1)?.isHost" class="host-badge">👑</span>
+              <!-- 踢人按钮：仅房主可见，且不能踢自己，且不在游戏中 -->
+              <button 
+                v-if="isHost && !room?.isPlaying && getPlayerAtSeat(seatIdx - 1)?.id !== myPlayerId"
+                class="kick-btn"
+                @click.stop="kickPlayer(getPlayerAtSeat(seatIdx - 1)?.id || '')"
+                title="踢出玩家"
+              >
+                👢
+              </button>
             </div>
           </template>
           <template v-else>
@@ -318,14 +427,45 @@ const displayCard = (card: Card) => {
         </div>
       </div>
 
-      <!-- 开始游戏按钮 -->
+      <!-- 开始游戏按钮（修改：需要所有玩家 Ready） -->
       <div v-if="isHost && seatedCount >= 2" class="start-game">
-        <button @click="handleStartGame" class="btn btn-primary btn-large">
+        <button 
+          @click="handleStartGame" 
+          class="btn btn-primary btn-large"
+          :disabled="!allSeatedPlayersReadyExceptHost"
+        >
           开始游戏 🎮
         </button>
+        <p v-if="!allSeatedPlayersReadyExceptHost" class="ready-hint-text">
+          等待所有玩家准备...
+        </p>
       </div>
-      <div v-else-if="!isHost" class="waiting">
-        等待房主开始游戏...
+      <!-- 非房主玩家 Ready 状态 -->
+      <div v-else-if="!isHost && isSeated" class="ready-section">
+        <div class="ready-players-room">
+          <div 
+            v-for="player in room?.players.filter((p: any) => p.seatIndex !== null)" 
+            :key="player.id" 
+            class="ready-player-badge"
+            :class="{ 'ready-yes': player.isReady || player.isHost, 'ready-no': !player.isReady && !player.isHost }"
+          >
+            <span>{{ player.nickname }}</span>
+            <span v-if="player.isHost">👑</span>
+            <span v-else-if="player.isReady">✅</span>
+            <span v-else>⏳</span>
+          </div>
+        </div>
+        <button 
+          v-if="!myReadyStatus" 
+          class="btn btn-primary" 
+          @click="handleReady"
+        >
+          我准备好了 ✅
+        </button>
+        <span v-else class="ready-done">✅ 已准备，等待房主开始</span>
+      </div>
+      <div v-else-if="!isHost && !isSeated" class="waiting">
+        请先入座
       </div>
       <div v-else class="waiting">
         至少需要 2 人入座才能开始
@@ -336,6 +476,7 @@ const displayCard = (card: Card) => {
     <div v-else-if="currentView === 'game'" class="game-page">
       <!-- 顶部信息 -->
       <div class="game-header">
+        <span class="player-name">🎮 {{ myPlayer?.nickname || '未知玩家' }}</span>
         <span>房间: {{ room?.id }}</span>
         <span>阶段: {{ room?.gameState?.phase }}</span>
         <span>底池: {{ totalPot }}</span>
@@ -381,7 +522,10 @@ const displayCard = (card: Card) => {
             <div class="table-player">
               <div class="player-info">
                 <span class="player-name">{{ getPlayerAtSeat(seatIdx - 1)?.nickname }}</span>
+                <!-- 庄位/盲注徽章 -->
                 <span v-if="room?.gameState?.dealerIndex === seatIdx - 1" class="dealer-btn">D</span>
+                <span v-if="room?.gameState?.smallBlindIndex === seatIdx - 1" class="blind-badge sb-badge">SB</span>
+                <span v-if="room?.gameState?.bigBlindIndex === seatIdx - 1" class="blind-badge bb-badge">BB</span>
               </div>
               <div class="player-chips">{{ formatChips(getPlayerAtSeat(seatIdx - 1)?.chips || 0) }}</div>
               <div class="player-bet" v-if="getPlayerAtSeat(seatIdx - 1)?.currentBet">
@@ -421,7 +565,21 @@ const displayCard = (card: Card) => {
       </div>
 
       <!-- 操作按钮（仅当轮到我时显示） -->
-      <div class="action-panel" v-if="isMyTurn && !myPlayer?.isFolded">
+      <div 
+        class="action-panel" 
+        v-if="isMyTurn && !myPlayer?.isFolded"
+        :key="`action-${room?.gameState?.stateVersion}`"
+      >
+        <!-- 倒计时进度条 -->
+        <div class="countdown-bar" v-if="remainingSeconds > 0">
+          <div 
+            class="countdown-progress" 
+            :style="{ width: `${(remainingSeconds / 30) * 100}%` }"
+            :class="{ 'countdown-danger': remainingSeconds <= 5 }"
+          />
+          <span class="countdown-text">{{ remainingSeconds }}s</span>
+        </div>
+        
         <div class="action-info">
           <span>💰 我的筹码: {{ myPlayer?.chips }}</span>
           <span v-if="callAmount > 0">📢 需跟注: {{ callAmount }}</span>
@@ -482,8 +640,114 @@ const displayCard = (card: Card) => {
       </div>
 
       <!-- 等待提示 -->
-      <div class="waiting-hint" v-else-if="!myPlayer?.isFolded">
+      <div class="waiting-hint" v-else-if="!myPlayer?.isFolded && !isShowdown">
         等待其他玩家行动...
+      </div>
+
+      <!-- Showdown moved to global scope -->
+
+      <!-- Ready 面板（新增） -->
+      <div class="ready-panel" v-if="isGameEnded && !isShowdown">
+        <h3 class="ready-title">🎯 等待下一局</h3>
+        <div class="ready-players">
+          <div 
+            v-for="player in room?.players.filter((p: any) => p.seatIndex !== null)" 
+            :key="player.id" 
+            class="ready-player"
+            :class="{ 'ready-yes': player.isReady, 'ready-no': !player.isReady }"
+          >
+            <span class="ready-player-name">{{ player.nickname }}</span>
+            <span class="ready-status">{{ player.isReady ? '✅ 已准备' : '⏳ 未准备' }}</span>
+          </div>
+        </div>
+        <div class="ready-actions">
+          <button 
+            v-if="!myReadyStatus" 
+            class="btn btn-primary" 
+            @click="handleReady"
+          >
+            我准备好了
+          </button>
+          <span v-else class="ready-done">✅ 你已准备</span>
+        </div>
+        <div class="ready-hint" v-if="isHost">
+          <button 
+            v-if="allPlayersReady" 
+            class="btn btn-primary btn-large" 
+            @click="startGame"
+          >
+            开始下一局 🎮
+          </button>
+          <span v-else class="waiting-text">等待所有玩家准备...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug 按钮（全局） -->
+    <button class="debug-btn" @click="showDebugPanel = !showDebugPanel">
+      🐛
+    </button>
+
+    <!-- Debug 面板（全局） -->
+    <div class="debug-panel" v-if="showDebugPanel">
+      <h4>调试面板</h4>
+      <div class="debug-info">
+        <p>View: {{ currentView }}</p>
+        <p>Phase: {{ room?.gameState?.phase || 'IDLE' }}</p>
+        <p>Version: {{ room?.gameState?.stateVersion || 0 }}</p>
+        <p>isPlaying: {{ room?.isPlaying }}</p>
+        <p>myPlayerId: {{ myPlayerId?.slice(0, 8) }}...</p>
+      </div>
+      <div class="debug-actions">
+        <button class="btn btn-danger" @click="clearLocalData">
+          清理本地数据
+        </button>
+      </div>
+    </div>
+
+    <!-- Showdown 结算展示 (全局覆盖) -->
+    <div class="showdown-overlay" v-if="isShowdown && handResult">
+      <div class="showdown-modal">
+        <h2 class="showdown-title">🎉 本局结算</h2>
+        
+        <!-- 赢家展示 -->
+        <div class="winner-section">
+          <div 
+            v-for="winner in handResult.winners" 
+            :key="winner.playerId" 
+            class="winner-card"
+          >
+            <span class="winner-name">{{ getPlayerNickname(winner.playerId) }}</span>
+            <span class="winner-hand">{{ winner.handRank || '赢家' }}</span>
+            <span class="winner-amount">+{{ winner.amount }}</span>
+          </div>
+        </div>
+        
+        <!-- 所有亮牌 -->
+        <div class="showdown-cards" v-if="handResult.showdownCards.length > 0">
+          <div 
+            v-for="player in handResult.showdownCards" 
+            :key="player.playerId" 
+            class="player-showdown"
+          >
+            <span class="player-showdown-name">{{ getPlayerNickname(player.playerId) }}</span>
+            <div class="cards-row">
+              <div 
+                v-for="(card, idx) in player.cards" 
+                :key="idx" 
+                class="card card-small"
+                :class="{ 'card-red': displayCard(card).color === 'red' }"
+              >
+                {{ displayCard(card).symbol }}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 修改：改为手动关闭按钮 -->
+        <button class="btn btn-primary showdown-close-btn" @click="closeShowdown">
+          知道了，准备下一局
+        </button>
       </div>
     </div>
   </div>
@@ -556,6 +820,20 @@ body {
 .btn-danger {
   background: #ef4444;
   color: white;
+}
+
+/* 踢人按钮样式 */
+.kick-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 4px;
+  transition: transform 0.1s;
+}
+.kick-btn:hover {
+  transform: scale(1.2);
 }
 .btn-large {
   padding: 16px 32px;
@@ -696,6 +974,11 @@ body {
   margin-bottom: 20px;
   font-size: 14px;
 }
+.game-header .player-name {
+  color: #4ade80;
+  font-weight: bold;
+  font-size: 15px;
+}
 
 /* 公共牌 */
 .community-cards, .my-cards {
@@ -784,6 +1067,21 @@ body {
   font-size: 12px;
   font-weight: bold;
 }
+/* 盲注徽章样式 */
+.blind-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+}
+.sb-badge {
+  background: #60a5fa;
+  color: white;
+}
+.bb-badge {
+  background: #f472b6;
+  color: white;
+}
 .player-bet {
   color: #fbbf24;
   font-size: 12px;
@@ -869,5 +1167,286 @@ body {
   padding: 20px;
   font-style: italic;
 }
+
+/* 倒计时进度条 */
+.countdown-bar {
+  height: 8px;
+  background: #374151;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 12px;
+}
+.countdown-progress {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+  transition: width 0.1s linear;
+  border-radius: 4px;
+}
+.countdown-danger {
+  background: linear-gradient(90deg, #ef4444, #dc2626) !important;
+  animation: pulse-danger 0.5s infinite;
+}
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.countdown-text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* Showdown 弹窗 */
+.showdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.showdown-modal {
+  background: linear-gradient(135deg, #1f2937, #111827);
+  padding: 32px;
+  border-radius: 20px;
+  text-align: center;
+  max-width: 90%;
+  min-width: 300px;
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.3);
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.showdown-title {
+  font-size: 28px;
+  margin-bottom: 24px;
+  color: #fbbf24;
+}
+.winner-section {
+  margin-bottom: 20px;
+}
+.winner-card {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #1a1a2e;
+  padding: 16px 24px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  animation: winnerPop 0.5s ease;
+}
+@keyframes winnerPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.winner-name {
+  font-weight: bold;
+  font-size: 18px;
+}
+.winner-hand {
+  font-size: 14px;
+  opacity: 0.8;
+}
+.winner-amount {
+  font-size: 24px;
+  font-weight: bold;
+  color: #166534;
+}
+.showdown-cards {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #374151;
+}
+.player-showdown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.player-showdown-name {
+  min-width: 80px;
+  text-align: right;
+  font-weight: 500;
+  color: #9ca3af;
+}
+.cards-row {
+  display: flex;
+  gap: 6px;
+}
+.card-small {
+  width: 40px;
+  height: 56px;
+  font-size: 16px;
+}
+.next-round-hint {
+  margin-top: 20px;
+  color: #9ca3af;
+  font-style: italic;
+  animation: blink 1.5s infinite;
+}
+
+/* Showdown 关闭按钮 */
+.showdown-close-btn {
+  margin-top: 20px;
+  width: 100%;
+}
+
+/* Ready 面板样式 */
+.ready-panel {
+  background: rgba(31, 41, 55, 0.95);
+  border-radius: 16px;
+  padding: 24px;
+  margin: 20px auto;
+  max-width: 400px;
+  text-align: center;
+}
+.ready-title {
+  font-size: 20px;
+  margin-bottom: 20px;
+}
+.ready-players {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ready-player {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #374151;
+}
+.ready-yes {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid #22c55e;
+}
+.ready-no {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #6b7280;
+}
+.ready-player-name {
+  font-weight: 600;
+}
+.ready-status {
+  color: #9ca3af;
+}
+.ready-actions {
+  margin-bottom: 16px;
+}
+.ready-done {
+  color: #22c55e;
+  font-weight: 600;
+}
+.ready-hint {
+  margin-top: 16px;
+}
+.waiting-text {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Debug 按钮和面板 */
+.debug-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #374151;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 1000;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.debug-btn:hover {
+  opacity: 1;
+}
+.debug-panel {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 200px;
+  z-index: 1000;
+}
+.debug-panel h4 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #9ca3af;
+}
+.debug-info {
+  font-size: 12px;
+  font-family: monospace;
+  margin-bottom: 12px;
+}
+.debug-info p {
+  margin-bottom: 4px;
+  color: #6b7280;
+}
+.debug-actions button {
+  width: 100%;
+  font-size: 12px;
+}
+
+/* 房间页 Ready 样式 */
+.ready-section {
+  text-align: center;
+  padding: 20px;
+}
+.ready-players-room {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.ready-player-badge {
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+}
+.ready-player-badge.ready-yes {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid #22c55e;
+}
+.ready-player-badge.ready-no {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #6b7280;
+}
+.ready-hint-text {
+  color: #9ca3af;
+  font-size: 14px;
+  margin-top: 10px;
+}
 </style>
+
 

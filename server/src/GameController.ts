@@ -301,9 +301,14 @@ export class GameController {
             result.shouldAdvancePhase = true;
         }
 
-        // 10. 检查是否只剩一人
+        // 10. 检查是否只剩一人（修复：包含 ALL_IN 玩家）
         const remainingPlayers = allPlayers.filter(p =>
-            p.isInHand() && !p.isFolded && p.status !== PlayerStatus.ELIMINATED
+            p.seatIndex !== null &&
+            !p.isFolded &&
+            p.status !== PlayerStatus.ELIMINATED &&
+            p.status !== PlayerStatus.FOLDED &&
+            p.status !== PlayerStatus.WAITING &&
+            p.status !== PlayerStatus.SPECTATING
         );
         if (remainingPlayers.length <= 1) {
             result.shouldEndHand = true;
@@ -547,9 +552,14 @@ export class GameController {
         const gameState = room.gameState!;
         const players = this.getSeatedPlayers(room);
 
-        // 检查是否只剩一人
+        // 检查是否只剩一人（修复：包含 ALL_IN 玩家）
         const remainingPlayers = players.filter(p =>
-            p.isInHand() && !p.isFolded && p.status !== PlayerStatus.ELIMINATED
+            p.seatIndex !== null &&
+            !p.isFolded &&
+            p.status !== PlayerStatus.ELIMINATED &&
+            p.status !== PlayerStatus.FOLDED &&
+            p.status !== PlayerStatus.WAITING &&
+            p.status !== PlayerStatus.SPECTATING
         );
 
         if (remainingPlayers.length <= 1) {
@@ -568,6 +578,7 @@ export class GameController {
         const nextPhase = phaseOrder[currentIndex + 1];
 
         if (nextPhase === GamePhase.SHOWDOWN || !nextPhase) {
+            console.log(`[GameController] 阶段推进: ${gameState.phase} → SHOWDOWN (River 结束)`);
             return 'SHOWDOWN';
         }
 
@@ -606,9 +617,15 @@ export class GameController {
             gameState.communityCards.push(...cards);
         }
 
-        // 获取未弃牌的玩家
+        // 获取未弃牌的玩家（修复：包含 ALL_IN 玩家）
         const showdownPlayers = players.filter(p =>
-            p.isInHand() && !p.isFolded && p.holeCards.length === 2
+            p.seatIndex !== null &&
+            !p.isFolded &&
+            p.status !== PlayerStatus.ELIMINATED &&
+            p.status !== PlayerStatus.FOLDED &&
+            p.status !== PlayerStatus.WAITING &&
+            p.status !== PlayerStatus.SPECTATING &&
+            p.holeCards.length === 2
         );
 
         // 评估每个玩家的牌型
@@ -616,6 +633,16 @@ export class GameController {
         showdownPlayers.forEach(p => {
             const evaluated = PokerEngine.evaluateHand(p.holeCards, gameState.communityCards);
             playerHands.set(p.id, evaluated);
+        });
+
+        // 调试日志：输出 Showdown 详细信息
+        console.log(`[GameController] === Showdown 开始 ===`);
+        console.log(`[GameController] 公共牌: ${gameState.communityCards.map(c => PokerEngine.getCardDisplayName(c)).join(' ')}`);
+        console.log(`[GameController] 参与者: ${showdownPlayers.length} 人`);
+        showdownPlayers.forEach(p => {
+            const hand = playerHands.get(p.id);
+            const holeCardsStr = p.holeCards.map(c => PokerEngine.getCardDisplayName(c)).join(' ');
+            console.log(`[GameController]   ${p.nickname}: ${holeCardsStr} → ${hand?.rankName} (score: ${hand?.score})`);
         });
 
         // 确保边池已计算
@@ -704,9 +731,14 @@ export class GameController {
         // 清除超时定时器
         this.clearActionTimer(room.id);
 
-        // 检查是否只剩一人
+        // 检查是否只剩一人（修复：包含 ALL_IN 玩家）
         const remainingPlayers = players.filter(p =>
-            p.isInHand() && !p.isFolded && p.status !== PlayerStatus.ELIMINATED
+            p.seatIndex !== null &&
+            !p.isFolded &&
+            p.status !== PlayerStatus.ELIMINATED &&
+            p.status !== PlayerStatus.FOLDED &&
+            p.status !== PlayerStatus.WAITING &&
+            p.status !== PlayerStatus.SPECTATING
         );
 
         let result: HandResult;

@@ -73,6 +73,7 @@ export interface PublicPlayerInfo {
     isFolded: boolean;
     isAllIn: boolean;
     isHost: boolean;
+    isReady: boolean;  // 新增：玩家是否准备就绪
 }
 
 /** 底池信息 */
@@ -131,6 +132,7 @@ export enum ClientEvent {
     STAND_UP = 'STAND_UP',
     START_GAME = 'START_GAME',
     PLAYER_ACTION = 'PLAYER_ACTION',
+    PLAYER_READY = 'PLAYER_READY',  // 新增
     RECONNECT = 'RECONNECT',
     LEAVE_ROOM = 'LEAVE_ROOM',
     KICK_PLAYER = 'KICK_PLAYER'
@@ -144,6 +146,7 @@ export enum ServerEvent {
     PLAYER_LEFT = 'PLAYER_LEFT',
     PLAYER_SAT = 'PLAYER_SAT',
     PLAYER_STOOD = 'PLAYER_STOOD',
+    PLAYER_KICKED = 'PLAYER_KICKED',   // 新增：被踢出
     GAME_STARTED = 'GAME_STARTED',
     SYNC_STATE = 'SYNC_STATE',
     DEAL_CARDS = 'DEAL_CARDS',
@@ -151,6 +154,7 @@ export enum ServerEvent {
     PLAYER_ACTED = 'PLAYER_ACTED',
     HAND_RESULT = 'HAND_RESULT',
     GAME_ENDED = 'GAME_ENDED',
+    READY_STATE_CHANGED = 'READY_STATE_CHANGED',  // 新增
     ERROR = 'ERROR',
     RECONNECTED = 'RECONNECTED'
 }

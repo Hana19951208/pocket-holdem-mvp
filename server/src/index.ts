@@ -221,6 +221,15 @@ io.on('connection', (socket: Socket) => {
                 return;
             }
 
+            // 新增：检查非房主玩家是否准备就绪（房主不需要准备）
+            const nonHostSeatedPlayers = seatedPlayers.filter(p => !p.isHost);
+            const notReadyPlayers = nonHostSeatedPlayers.filter(p => !p.isReady);
+            if (notReadyPlayers.length > 0) {
+                const names = notReadyPlayers.map(p => p.nickname).join(', ');
+                sendError(socket, 'PLAYERS_NOT_READY', `玩家未准备: ${names}`);
+                return;
+            }
+
             // 通过 GameController 开始新手牌
             room.isPlaying = true;
             room.gameState = gameController.startNewHand(room);
@@ -303,6 +312,10 @@ io.on('connection', (socket: Socket) => {
                 return;
             }
 
+            // 先获取被踢玩家的 socketId（踢人后无法获取）
+            const targetPlayer = playerInfo.room.players.get(payload.targetPlayerId);
+            const targetSocketId = targetPlayer?.socketId;
+
             const result = roomManager.kickPlayer(
                 playerInfo.player.id,
                 payload.targetPlayerId
@@ -311,6 +324,18 @@ io.on('connection', (socket: Socket) => {
             if (!result.success) {
                 sendError(socket, result.error!, getKickPlayerErrorMessage(result.error!));
                 return;
+            }
+
+            // 通知被踢玩家
+            if (targetSocketId) {
+                io.to(targetSocketId).emit(ServerEvent.PLAYER_KICKED, {
+                    reason: '您已被房主踢出房间'
+                });
+                // 强制断开被踢玩家的 socket
+                const targetSocket = io.sockets.sockets.get(targetSocketId);
+                if (targetSocket) {
+                    targetSocket.leave(playerInfo.room.id);
+                }
             }
 
             const room = roomManager.getRoom(playerInfo.room.id);
@@ -322,6 +347,38 @@ io.on('connection', (socket: Socket) => {
             }
         } catch (error) {
             sendError(socket, 'KICK_PLAYER_FAILED', (error as Error).message);
+        }
+    });
+
+    // ------------------------
+    // 玩家准备就绪（新增）
+    // ------------------------
+    socket.on(ClientEvent.PLAYER_READY, () => {
+        try {
+            const playerInfo = roomManager.getPlayerBySocketId(socket.id);
+            if (!playerInfo) {
+                sendError(socket, 'NOT_IN_ROOM', '您不在任何房间中');
+                return;
+            }
+
+            const room = roomManager.getRoom(playerInfo.room.id);
+            if (!room) {
+                sendError(socket, 'ROOM_NOT_FOUND', '房间不存在');
+                return;
+            }
+
+            // 设置玩家准备状态
+            playerInfo.player.isReady = true;
+            console.log(`[Socket] 玩家 ${playerInfo.player.nickname} 已准备`);
+
+            // 广播准备状态变更
+            io.to(room.id).emit(ServerEvent.READY_STATE_CHANGED, {
+                room: roomManager.getPublicRoomInfo(room),
+                playerId: playerInfo.player.id,
+                isReady: true
+            });
+        } catch (error) {
+            sendError(socket, 'READY_FAILED', (error as Error).message);
         }
     });
 
@@ -469,12 +526,16 @@ function endCurrentHand(room: Room): void {
 
         console.log(`[Socket] 房间 ${room.id} 游戏结束`);
     } else {
-        // 延迟后开始新手牌
-        setTimeout(() => {
-            if (room.isPlaying) {
-                startNewHandInRoom(room);
-            }
-        }, 3000);
+        // 修改：不再自动开始下一局，等待玩家 Ready
+        room.isPlaying = false;
+        room.gameState!.phase = GamePhase.IDLE;
+
+        // 重置所有玩家的准备状态
+        room.players.forEach(p => {
+            p.isReady = false;
+        });
+
+        console.log(`[Socket] 房间 ${room.id} 本局结束，等待玩家准备下一局`);
     }
 }
 
