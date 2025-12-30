@@ -26,7 +26,7 @@ const DEFAULT_ROOM_CONFIG: RoomConfig = {
     initialChips: 1000,
     smallBlind: 5,
     bigBlind: 10,
-    maxPlayers: 9,
+    maxPlayers: 6,
     turnTimeout: 30
 };
 
@@ -394,7 +394,7 @@ export class RoomManager {
     kickPlayer(
         hostId: string,
         targetPlayerId: string
-    ): { success: boolean; error?: string } {
+    ): { success: boolean; error?: string; newHostId?: string } {
         const roomId = this.playerRoomMap.get(hostId);
         if (!roomId) {
             return { success: false, error: 'HOST_NOT_IN_ROOM' };
@@ -425,12 +425,78 @@ export class RoomManager {
             return { success: false, error: 'TARGET_NOT_FOUND' };
         }
 
-        // 执行踢出
-        this.leaveRoom(targetPlayerId);
+        // 执行踢出（使用 leaveRoom 来处理房主转移）
+        const result = this.leaveRoom(targetPlayerId);
+        if (!result) {
+            return { success: false, error: 'KICK_FAILED' };
+        }
 
         console.log(`[RoomManager] 房主踢出玩家 ${target.nickname}`);
 
-        return { success: true };
+        return { success: true, newHostId: result.newHostId };
+    }
+
+    /**
+     * 强制移除玩家（用于自动淘汰等内部调用）
+     * 不受游戏进行中限制
+     */
+    forceRemovePlayer(playerId: string): {
+        roomId: string;
+        shouldDestroyRoom: boolean;
+        newHostId?: string;
+    } | null {
+        const roomId = this.playerRoomMap.get(playerId);
+        if (!roomId) return null;
+
+        const room = this.rooms.get(roomId);
+        if (!room) return null;
+
+        const player = room.players.get(playerId);
+        if (!player) return null;
+
+        // 如果在座位上，先站起并清空座位
+        if (player.seatIndex !== null) {
+            const seatIndex = player.seatIndex;
+            room.seatMap[seatIndex] = null;
+            player.seatIndex = null;
+        }
+
+        // 兜底：巡检整个座位表，确保该玩家没占任何坑
+        for (let i = 0; i < room.seatMap.length; i++) {
+            if (room.seatMap[i] === playerId) {
+                room.seatMap[i] = null;
+            }
+        }
+
+        // 移除玩家
+        room.players.delete(playerId);
+        room.spectators.delete(playerId);
+        this.playerRoomMap.delete(playerId);
+        if (player.socketId) {
+            this.socketPlayerMap.delete(player.socketId);
+        }
+
+        console.log(`[RoomManager] 玩家 ${player.nickname} (${playerId}) 已从系统强制移除`);
+
+        // 检查是否需要销毁房间或转移房主
+        if (room.players.size === 0) {
+            this.destroyRoom(roomId);
+            return { roomId, shouldDestroyRoom: true };
+        }
+
+        // 如果移除的是房主，转移房主身份
+        let newHostId: string | undefined;
+        if (player.isHost) {
+            const newHost = room.players.values().next().value;
+            if (newHost) {
+                newHost.isHost = true;
+                room.hostId = newHost.id;
+                newHostId = newHost.id;
+                console.log(`[RoomManager] 房主转移给 ${newHost.nickname}`);
+            }
+        }
+
+        return { roomId, shouldDestroyRoom: false, newHostId };
     }
 
     // ========================================

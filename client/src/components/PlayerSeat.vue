@@ -101,16 +101,19 @@ const avatarLetter = computed(() => {
 </template>
 
 <style scoped>
+/* ========================================
+   移动端优化的玩家座位
+   ======================================== */
 .player-seat {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px;
+  padding: 6px 8px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
-  min-width: 64px;
+  min-width: 70px; /* 增加最小宽度 */
   transition: all 0.2s ease;
 }
 
@@ -163,8 +166,8 @@ const avatarLetter = computed(() => {
 
 .avatar {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   display: flex;
@@ -173,10 +176,24 @@ const avatarLetter = computed(() => {
   margin-bottom: 4px;
 }
 
+/* 大屏幕增加头像尺寸 */
+@media (min-width: 430px) {
+  .avatar {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 .avatar-letter {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: white;
+}
+
+@media (min-width: 430px) {
+  .avatar-letter {
+    font-size: 1rem;
+  }
 }
 
 .disconnected-indicator {
@@ -195,9 +212,16 @@ const avatarLetter = computed(() => {
   font-weight: 600;
   color: white;
   white-space: nowrap;
-  max-width: 60px;
+  /* 增加昵称宽度以适应中文 */
+  max-width: 75px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (min-width: 430px) {
+  .nickname {
+    max-width: 85px;
+  }
 }
 
 .host-badge {

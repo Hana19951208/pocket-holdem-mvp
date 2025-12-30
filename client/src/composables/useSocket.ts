@@ -260,13 +260,19 @@ export const useSocket = () => {
         });
 
         // 被踢出房间处理
-        socket.value.on(ServerEvent.PLAYER_KICKED, (data: { reason: string }) => {
+        socket.value.on(ServerEvent.PLAYER_KICKED, (data: { reason: string; message: string }) => {
             isKicked.value = true;
             kickReason.value = data.reason;
             clearSession();
             room.value = null;
             myCards.value = [];
-            console.log('[Socket] 您已被踢出房间:', data.reason);
+            console.log('[Socket] 您已被踢出房间:', data.reason, data.message);
+        });
+
+        // 房主转移处理
+        socket.value.on(ServerEvent.HOST_TRANSFERRED, (data: { newHostId: string; newHostNickname: string }) => {
+            console.log('[Socket] 房主已转移给:', data.newHostNickname);
+            // 房间状态会在下一次 SYNC_STATE 或 ROOM_UPDATED 中更新
         });
     };
 

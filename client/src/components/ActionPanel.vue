@@ -197,6 +197,9 @@ const quickRaise = (multiplier: number) => {
 </template>
 
 <style scoped>
+/* ========================================
+   移动端优化的操作面板
+   ======================================== */
 .action-panel {
   position: fixed;
   bottom: 0;
@@ -204,8 +207,10 @@ const quickRaise = (multiplier: number) => {
   right: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85));
   backdrop-filter: blur(12px);
-  padding: 12px 16px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  padding: 10px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
   z-index: 100;
   transition: all 0.3s ease;
 }
@@ -221,23 +226,42 @@ const quickRaise = (multiplier: number) => {
 
 .main-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
+  align-items: stretch;
 }
 
 .action-btn {
   flex: 1;
-  max-width: 100px;
+  min-width: 60px;
+  max-width: 90px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  justify-content: space-evenly;
+  gap: 0;
+  padding: 8px 6px;
   border-radius: 12px;
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  /* 固定高度确保对齐 */
+  height: 56px;
+}
+
+/* 大屏幕增加按钮尺寸 */
+@media (min-width: 430px) {
+  .action-panel {
+    padding: 12px 16px;
+  }
+  .action-btn {
+    max-width: 100px;
+    padding: 12px 8px;
+  }
+  .main-actions {
+    gap: 8px;
+  }
 }
 
 .action-btn:disabled {
@@ -250,17 +274,29 @@ const quickRaise = (multiplier: number) => {
 }
 
 .btn-icon {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
 }
 
 .btn-label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .btn-amount {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   opacity: 0.8;
+}
+
+@media (min-width: 430px) {
+  .btn-icon {
+    font-size: 1.2rem;
+  }
+  .btn-label {
+    font-size: 0.8rem;
+  }
+  .btn-amount {
+    font-size: 0.7rem;
+  }
 }
 
 /* 按钮颜色变体 */
@@ -289,48 +325,68 @@ const quickRaise = (multiplier: number) => {
   color: white;
 }
 
-/* 加注面板 */
+/* ========================================
+   加注面板 - 移动端优化
+   ======================================== */
 .raise-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .raise-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .back-btn {
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
 .raise-title {
   color: white;
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .quick-raises {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .quick-raises button {
   flex: 1;
-  padding: 8px;
+  padding: 8px 4px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.1);
   color: white;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: 36px;
+}
+
+@media (min-width: 430px) {
+  .quick-raises button {
+    font-size: 0.8rem;
+    padding: 8px;
+  }
+  .raise-panel {
+    gap: 12px;
+  }
+  .raise-header {
+    gap: 12px;
+  }
+  .quick-raises {
+    gap: 8px;
+  }
 }
 
 .quick-raises button:hover {
@@ -338,13 +394,13 @@ const quickRaise = (multiplier: number) => {
 }
 
 .slider-container {
-  padding: 0 8px;
+  padding: 0 4px;
 }
 
 .raise-slider {
   width: 100%;
-  height: 8px;
-  border-radius: 4px;
+  height: 12px; /* 增加触摸区域 */
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.2);
   appearance: none;
   cursor: pointer;
@@ -352,8 +408,8 @@ const quickRaise = (multiplier: number) => {
 
 .raise-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 24px;
-  height: 24px;
+  width: 26px; /* 增加滑块大小 */
+  height: 26px;
   border-radius: 50%;
   background: #f59e0b;
   cursor: pointer;
@@ -363,48 +419,84 @@ const quickRaise = (multiplier: number) => {
   display: flex;
   justify-content: space-between;
   margin-top: 4px;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .current-value {
   color: #f59e0b;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 430px) {
+  .raise-slider {
+    height: 8px;
+  }
+  .raise-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .slider-labels {
+    font-size: 0.7rem;
+  }
+  .current-value {
+    font-size: 0.9rem;
+  }
 }
 
 .confirm-raise {
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   border-radius: 12px;
   border: none;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: white;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+@media (min-width: 430px) {
+  .confirm-raise {
+    padding: 14px;
+    font-size: 1rem;
+  }
 }
 
 .confirm-raise:active {
   transform: scale(0.98);
 }
 
-/* 行动提示 */
+/* ========================================
+   行动提示 - 移动端优化
+   ======================================== */
 .turn-indicator {
   position: absolute;
-  top: -32px;
+  top: -28px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(234, 179, 8, 0.9);
   color: #000;
-  padding: 6px 16px;
+  padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+@media (min-width: 430px) {
+  .turn-indicator {
+    top: -32px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    gap: 6px;
+  }
 }
 
 .pulse-dot {

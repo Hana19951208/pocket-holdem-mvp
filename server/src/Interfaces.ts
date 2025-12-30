@@ -180,6 +180,7 @@ export enum ServerEvent {
     PLAYER_SAT = 'PLAYER_SAT',         // 玩家入座
     PLAYER_STOOD = 'PLAYER_STOOD',     // 玩家站起
     PLAYER_KICKED = 'PLAYER_KICKED',   // 新增：玩家被踢出
+    HOST_TRANSFERRED = 'HOST_TRANSFERRED', // 房主转移
     GAME_STARTED = 'GAME_STARTED',     // 游戏开始
     SYNC_STATE = 'SYNC_STATE',         // 状态同步
     DEAL_CARDS = 'DEAL_CARDS',         // 发牌（仅发给自己的手牌）

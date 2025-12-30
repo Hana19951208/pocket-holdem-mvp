@@ -9,8 +9,7 @@ import { ref, computed } from 'vue';
 import type {
     PublicRoomInfo,
     Card,
-    PublicPlayerInfo,
-    PublicGameState
+    PublicPlayerInfo
 } from '../types';
 
 export const useGameStore = defineStore('game', () => {

@@ -14,7 +14,8 @@ import {
     GamePhase,
     PlayerStatus,
     type Room,
-    type PlayerActionPayload
+    type PlayerActionPayload,
+    type Card
 } from './Interfaces.js';
 import { Player } from './Player.js';
 
@@ -421,7 +422,7 @@ class GameSimulator {
             .filter(p => p.holeCards.length > 0)
             .sort((a, b) => a.seatIndex! - b.seatIndex!)
             .forEach(p => {
-                const cards = p.holeCards.map(c => PokerEngine.getCardDisplayName(c)).join(' ');
+                const cards = p.holeCards.map((c: Card) => PokerEngine.getCardDisplayName(c)).join(' ');
                 log(`   ${p.nickname} [${p.seatIndex}]: ${cards}`);
             });
     }

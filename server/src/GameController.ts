@@ -725,7 +725,11 @@ export class GameController {
     /**
      * 结束这手牌
      */
-    endHand(room: Room): { result: HandResult; gameEnded: boolean } {
+    endHand(room: Room): {
+        result: HandResult;
+        gameEnded: boolean;
+        eliminatedPlayers: Array<{ playerId: string; nickname: string; wasHost: boolean }>;
+    } {
         const players = this.getSeatedPlayers(room);
 
         // 清除超时定时器
@@ -748,10 +752,17 @@ export class GameController {
             result = this.evaluateShowdown(room);
         }
 
-        // 标记淘汰玩家
+        // 标记淘汰玩家并收集被淘汰的玩家信息
+        const eliminatedPlayers: Array<{ playerId: string; nickname: string; wasHost: boolean }> = [];
         players.forEach(p => {
             if (p.chips === 0 && p.seatIndex !== null) {
+                const wasHost = p.isHost;
                 p.markAsEliminated();
+                eliminatedPlayers.push({
+                    playerId: p.id,
+                    nickname: p.nickname,
+                    wasHost
+                });
             }
         });
 
@@ -765,7 +776,7 @@ export class GameController {
         room.gameState!.phase = GamePhase.SHOWDOWN;
         room.gameState!.stateVersion++;
 
-        return { result, gameEnded };
+        return { result, gameEnded, eliminatedPlayers };
     }
 
     // ========================================

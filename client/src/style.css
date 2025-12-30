@@ -1,9 +1,14 @@
+/* ========================================
+   移动端优先的全局样式
+   ======================================== */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 
@@ -11,30 +16,41 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* 安全区域变量 */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 a {
   font-weight: 500;
   color: #646cff;
-  text-decoration: inherit;
+  text-decoration: none;
 }
+
 a:hover {
   color: #535bf2;
 }
 
+/* 移动端优化的 body */
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* 防止 iOS 橡皮筋效果影响布局 */
+  overscroll-behavior-y: none;
+  /* 优化触摸滚动 */
+  -webkit-overflow-scrolling: touch;
 }
 
 h1 {
-  font-size: 3.2em;
+  font-size: clamp(1.8rem, 5vw, 3.2rem);
   line-height: 1.1;
 }
 
+/* 移动端优化的按钮 */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -43,37 +59,80 @@ button {
   font-weight: 500;
   font-family: inherit;
   background-color: #1a1a1a;
+  color: inherit;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: border-color 0.25s, transform 0.1s;
+  /* 最小触摸区域 */
+  min-height: 44px;
+  min-width: 44px;
 }
+
 button:hover {
   border-color: #646cff;
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+
+button:active {
+  transform: scale(0.98);
 }
 
-.card {
-  padding: 2em;
+button:focus,
+button:focus-visible {
+  outline: 2px solid #646cff;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  /* 移除默认居中，由内部组件控制 */
 }
 
+/* 响应式字体大小 */
+@media (max-width: 380px) {
+  :root {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 430px) {
+  :root {
+    font-size: 16px;
+  }
+}
+
+/* 防止文本选择干扰操作 */
+@media (hover: none) and (pointer: coarse) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 允许输入框选择文本 */
+  input,
+  textarea {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* 暗色主题优化 */
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
     background-color: #ffffff;
   }
+
   a:hover {
     color: #747bff;
   }
+
   button {
     background-color: #f9f9f9;
+    color: #1a1a1a;
   }
 }
