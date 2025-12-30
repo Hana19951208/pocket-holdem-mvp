@@ -137,24 +137,36 @@ const handleSeatClick = (seatIndex: number) => {
 </template>
 
 <style scoped>
+/* ========================================
+   响应式牌桌布局
+   ======================================== */
 .poker-table {
   position: relative;
   width: 100%;
-  padding-bottom: 90%; /* 接近正方形，留出座位空间 */
+  /* 响应式宽高比 */
+  padding-bottom: min(90%, 85vh);
   max-width: 500px;
   margin: 0 auto;
 }
 
+/* 大屏幕优化 */
+@media (min-width: 430px) {
+  .poker-table {
+    max-width: 600px;
+  }
+}
+
 .table-surface {
   position: absolute;
-  top: 15%;
-  left: 10%;
-  right: 10%;
-  bottom: 15%;
+  /* 响应式边距 */
+  top: max(12%, var(--safe-area-top, 0px) + 2%);
+  left: 8%;
+  right: 8%;
+  bottom: max(12%, var(--safe-area-bottom, 0px) + 2%);
   background: linear-gradient(145deg, #1a5c3a 0%, #0d3a24 100%);
   border-radius: 50%;
-  border: 8px solid #8b4513;
-  box-shadow: 
+  border: 6px solid #8b4513;
+  box-shadow:
     inset 0 0 60px rgba(0, 0, 0, 0.5),
     0 8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
@@ -164,14 +176,15 @@ const handleSeatClick = (seatIndex: number) => {
 
 .community-area {
   text-align: center;
+  padding: var(--spacing-sm);
 }
 
 .phase-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
   letter-spacing: 2px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .community-cards {
@@ -182,32 +195,54 @@ const handleSeatClick = (seatIndex: number) => {
 }
 
 .card-placeholder {
-  width: 36px;
-  height: 50px;
+  width: 32px;
+  height: 44px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   border: 1px dashed rgba(255, 255, 255, 0.2);
 }
 
+/* 大屏幕增加占位符尺寸 */
+@media (min-width: 430px) {
+  .card-placeholder {
+    width: 36px;
+    height: 50px;
+  }
+}
+
 .pot-display {
-  margin-top: 12px;
+  margin-top: 10px;
   background: rgba(0, 0, 0, 0.4);
-  padding: 6px 16px;
+  padding: 4px 12px;
   border-radius: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pot-label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
 .pot-amount {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #ffd700;
+}
+
+/* 大屏幕增加字体 */
+@media (min-width: 430px) {
+  .pot-display {
+    padding: 6px 16px;
+    margin-top: 12px;
+  }
+  .pot-label {
+    font-size: 0.7rem;
+  }
+  .pot-amount {
+    font-size: 1rem;
+  }
 }
 
 .seats-layer {
@@ -226,8 +261,8 @@ const handleSeatClick = (seatIndex: number) => {
 }
 
 .empty-seat {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   border: 2px dashed rgba(255, 255, 255, 0.25);
@@ -237,6 +272,14 @@ const handleSeatClick = (seatIndex: number) => {
   justify-content: center;
   cursor: default;
   transition: all 0.2s ease;
+}
+
+/* 大屏幕增加空座位尺寸 */
+@media (min-width: 430px) {
+  .empty-seat {
+    width: 56px;
+    height: 56px;
+  }
 }
 
 .empty-seat.can-sit {
@@ -251,14 +294,23 @@ const handleSeatClick = (seatIndex: number) => {
 }
 
 .seat-number {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.4);
   font-weight: 600;
 }
 
 .sit-label {
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   color: #4ade80;
   margin-top: 2px;
+}
+
+@media (min-width: 430px) {
+  .seat-number {
+    font-size: 0.8rem;
+  }
+  .sit-label {
+    font-size: 0.6rem;
+  }
 }
 </style>

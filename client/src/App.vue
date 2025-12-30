@@ -9,7 +9,8 @@
  */
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { useSocket } from './composables/useSocket';
-import { ActionType, type Card, getCardDisplay, formatChips, GamePhase } from './types';
+import { ActionType, formatChips, GamePhase } from './types';
+import CardDisplay from './components/CardDisplay.vue';
 
 // 使用 Socket 连接
 const { 
@@ -251,11 +252,6 @@ const getPlayerAtSeat = (seatIndex: number) => {
   return room.value.players.find(p => p.seatIndex === seatIndex) || null;
 };
 
-// 获取牌的显示
-const displayCard = (card: Card) => {
-  return getCardDisplay(card);
-};
-
 // 获取玩家昵称（用于 Showdown 展示）
 const getPlayerNickname = (playerId: string) => {
   const player = room.value?.players.find(p => p.id === playerId);
@@ -487,14 +483,12 @@ onUnmounted(() => {
         <div class="cards-label">公共牌</div>
         <div class="cards-list">
           <template v-if="room?.gameState?.communityCards?.length">
-            <div 
-              v-for="(card, idx) in room.gameState.communityCards" 
+            <CardDisplay
+              v-for="(card, idx) in room.gameState.communityCards"
               :key="idx"
-              class="card"
-              :class="{ 'card-red': displayCard(card).color === 'red' }"
-            >
-              {{ displayCard(card).symbol }}
-            </div>
+              :card="card"
+              size="medium"
+            />
           </template>
           <template v-else>
             <div class="cards-placeholder">等待发牌...</div>
@@ -549,14 +543,12 @@ onUnmounted(() => {
         <div class="cards-label">我的手牌</div>
         <div class="cards-list">
           <template v-if="myCards.length">
-            <div 
-              v-for="(card, idx) in myCards" 
+            <CardDisplay
+              v-for="(card, idx) in myCards"
               :key="idx"
-              class="card card-large"
-              :class="{ 'card-red': displayCard(card).color === 'red' }"
-            >
-              {{ displayCard(card).symbol }}
-            </div>
+              :card="card"
+              size="large"
+            />
           </template>
           <template v-else>
             <div class="cards-placeholder">无手牌</div>
@@ -564,7 +556,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 操作按钮（仅当轮到我时显示） -->
+      <!-- 操作面板 (仅当轮到我时显示) -->
       <div 
         class="action-panel" 
         v-if="isMyTurn && !myPlayer?.isFolded"
@@ -585,10 +577,24 @@ onUnmounted(() => {
           <span v-if="callAmount > 0">📢 需跟注: {{ callAmount }}</span>
           <span class="turn-indicator">🎯 轮到你行动</span>
         </div>
+
+        <!-- 加注调整区 (仅当可以加注时显示) -->
+        <div class="raise-area" v-if="canRaise">
+          <div class="raise-slider-container">
+            <input 
+              v-model.number="raiseAmount" 
+              type="range"
+              :min="minRaise"
+              :max="maxRaise"
+              class="raise-slider"
+            />
+            <div class="raise-value-display">{{ raiseAmount || minRaise }}</div>
+          </div>
+        </div>
         
-        <div class="action-buttons">
-          <!-- 弃牌（始终可用） -->
-          <button @click="handleAction(ActionType.FOLD)" class="btn btn-fold">
+        <div class="action-buttons-grid">
+          <!-- 弃牌 -->
+          <button @click="handleAction(ActionType.FOLD)" class="action-btn btn-fold">
             弃牌
           </button>
           
@@ -596,7 +602,7 @@ onUnmounted(() => {
           <button 
             v-if="canCheck" 
             @click="handleAction(ActionType.CHECK)" 
-            class="btn btn-check"
+            class="action-btn btn-check"
           >
             过牌
           </button>
@@ -605,34 +611,25 @@ onUnmounted(() => {
           <button 
             v-if="canCall" 
             @click="handleAction(ActionType.CALL)" 
-            class="btn btn-call"
+            class="action-btn btn-call"
           >
             跟注 {{ callAmount }}
           </button>
           
-          <!-- 加注 -->
-          <div class="raise-group" v-if="canRaise">
-            <input 
-              v-model.number="raiseAmount" 
-              type="range"
-              :min="minRaise"
-              :max="maxRaise"
-              class="raise-slider"
-            />
-            <span class="raise-value">{{ raiseAmount || minRaise }}</span>
-            <button 
-              @click="handleAction(ActionType.RAISE, raiseAmount || minRaise)" 
-              class="btn btn-raise"
-            >
-              加注
-            </button>
-          </div>
+          <!-- 加注按钮 -->
+          <button 
+            v-if="canRaise"
+            @click="handleAction(ActionType.RAISE, raiseAmount || minRaise)" 
+            class="action-btn btn-raise"
+          >
+            加注
+          </button>
           
           <!-- 全押 -->
           <button 
             v-if="canAllIn" 
             @click="handleAction(ActionType.ALL_IN)" 
-            class="btn btn-allin"
+            class="action-btn btn-allin"
           >
             ALL-IN {{ myPlayer?.chips }}
           </button>
@@ -712,9 +709,9 @@ onUnmounted(() => {
         
         <!-- 赢家展示 -->
         <div class="winner-section">
-          <div 
-            v-for="winner in handResult.winners" 
-            :key="winner.playerId" 
+          <div
+            v-for="winner in handResult.winners"
+            :key="winner.playerId"
             class="winner-card"
           >
             <span class="winner-name">{{ getPlayerNickname(winner.playerId) }}</span>
@@ -722,24 +719,35 @@ onUnmounted(() => {
             <span class="winner-amount">+{{ winner.amount }}</span>
           </div>
         </div>
-        
+
+        <!-- 公共牌展示 -->
+        <div class="showdown-community" v-if="room?.gameState?.communityCards?.length">
+          <div class="showdown-community-label">公共牌</div>
+          <div class="showdown-community-cards">
+            <CardDisplay
+              v-for="(card, idx) in room.gameState.communityCards"
+              :key="`comm-${idx}`"
+              :card="card"
+              size="small"
+            />
+          </div>
+        </div>
+
         <!-- 所有亮牌 -->
         <div class="showdown-cards" v-if="handResult.showdownCards.length > 0">
-          <div 
-            v-for="player in handResult.showdownCards" 
-            :key="player.playerId" 
+          <div
+            v-for="player in handResult.showdownCards"
+            :key="player.playerId"
             class="player-showdown"
           >
             <span class="player-showdown-name">{{ getPlayerNickname(player.playerId) }}</span>
             <div class="cards-row">
-              <div 
-                v-for="(card, idx) in player.cards" 
-                :key="idx" 
-                class="card card-small"
-                :class="{ 'card-red': displayCard(card).color === 'red' }"
-              >
-                {{ displayCard(card).symbol }}
-              </div>
+              <CardDisplay
+                v-for="(card, idx) in player.cards"
+                :key="idx"
+                :card="card"
+                size="small"
+              />
             </div>
           </div>
         </div>
@@ -754,6 +762,44 @@ onUnmounted(() => {
 </template>
 
 <style>
+/* ========================================
+   移动端优先的响应式基础样式
+   ======================================== */
+
+/* CSS 变量定义 */
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.8rem;
+  --font-size-md: 0.9rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.1rem;
+  --font-size-2xl: 1.25rem;
+
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* 大屏幕变量覆盖 */
+@media (min-width: 430px) {
+  :root {
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-md: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+  }
+}
+
 /* 基础样式 */
 * {
   box-sizing: border-box;
@@ -766,12 +812,22 @@ body {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: #fff;
   min-height: 100vh;
+  /* 移动端优化：移除 flex 居中，使用自然流 */
+  display: block;
 }
 
 .app {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  /* 响应式 padding */
+  padding: var(--spacing-md);
+  padding-top: calc(var(--spacing-md) + var(--safe-area-top));
+  padding-bottom: calc(var(--spacing-md) + var(--safe-area-bottom));
+  padding-left: calc(var(--spacing-md) + var(--safe-area-left));
+  padding-right: calc(var(--spacing-md) + var(--safe-area-right));
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 连接状态 */
@@ -792,31 +848,44 @@ body {
   text-align: center;
 }
 
-/* 按钮 */
+/* ========================================
+   按钮 - 响应式设计
+   ======================================== */
 .btn {
-  padding: 12px 24px;
+  /* 响应式 padding */
+  padding: 12px var(--spacing-lg);
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition: all 0.2s;
+  /* 最小触摸区域 */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .btn-primary {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
 }
+
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
+
 .btn-secondary {
   background: #374151;
   color: white;
 }
+
 .btn-danger {
   background: #ef4444;
   color: white;
@@ -840,43 +909,59 @@ body {
   font-size: 18px;
 }
 
-/* 输入框 */
+/* ========================================
+   输入框 - 响应式设计
+   ======================================== */
 .input {
   width: 100%;
-  padding: 14px 18px;
+  padding: 14px var(--spacing-lg);
   border: 2px solid #374151;
   border-radius: 8px;
   background: #1f2937;
   color: white;
+  font-size: var(--font-size-md);
+  /* 移动端优化：防止缩放 */
   font-size: 16px;
 }
+
 .input:focus {
   outline: none;
   border-color: #6366f1;
 }
 
-/* 首页 */
+/* ========================================
+   首页 - 响应式布局
+   ======================================== */
 .home-page {
   text-align: center;
-  padding-top: 60px;
+  padding-top: 10vh;
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
+
 .home-page h1 {
-  font-size: 48px;
-  margin-bottom: 10px;
+  font-size: clamp(28px, 8vw, 48px);
+  margin-bottom: var(--spacing-sm);
 }
 .subtitle {
   color: #9ca3af;
-  margin-bottom: 40px;
+  margin-bottom: var(--spacing-2xl);
+  font-size: var(--font-size-md);
 }
+
 .form-group {
   max-width: 300px;
-  margin: 0 auto 20px;
+  margin: 0 auto var(--spacing-lg);
 }
+
 .actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
   justify-content: center;
-  margin-top: 20px;
+  margin-top: var(--spacing-lg);
+  flex-wrap: wrap;
 }
 .join-form {
   max-width: 300px;
@@ -906,21 +991,35 @@ body {
   margin: 8px 0;
 }
 
-/* 座位网格 */
+/* ========================================
+   座位网格 - 响应式布局
+   ======================================== */
 .seats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-2xl);
 }
+
+/* 小屏幕优化为 2 列 */
+@media (max-width: 380px) {
+  .seats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .seat {
   background: #1f2937;
   border: 2px solid #374151;
   border-radius: 12px;
-  padding: 20px;
+  padding: var(--spacing-lg);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .seat:hover {
   border-color: #6366f1;
@@ -961,81 +1060,82 @@ body {
   padding: 20px;
 }
 
-/* 游戏页面 */
+/* ========================================
+   游戏页面 - 响应式布局
+   ======================================== */
 .game-page {
-  padding-top: 10px;
+  padding-top: var(--spacing-sm);
+  padding-bottom: 180px; /* 为底部操作面板留空间 */
 }
+
 .game-header {
   display: flex;
   justify-content: space-between;
   background: #1f2937;
-  padding: 12px 16px;
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: 8px;
-  margin-bottom: 20px;
-  font-size: 14px;
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-size-xs);
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
 }
+
 .game-header .player-name {
   color: #4ade80;
   font-weight: bold;
-  font-size: 15px;
+  font-size: var(--font-size-sm);
 }
 
-/* 公共牌 */
-.community-cards, .my-cards {
+/* ========================================
+   扑克牌容器 - 响应式布局
+   ======================================== */
+.community-cards,
+.my-cards {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-lg);
 }
+
 .cards-label {
   color: #9ca3af;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
 }
+
 .cards-list {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
   justify-content: center;
+  flex-wrap: wrap;
 }
-.card {
-  background: white;
-  color: #1a1a2e;
-  width: 50px;
-  height: 70px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: bold;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-}
-.card-large {
-  width: 60px;
-  height: 84px;
-  font-size: 24px;
-}
-.card-red {
-  color: #dc2626;
-}
+
 .cards-placeholder {
   color: #6b7280;
   font-style: italic;
 }
 
-/* 游戏桌座位 */
+/* ========================================
+   游戏桌座位 - 移动端优化
+   ======================================== */
 .game-table {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  /* 响应式列数：小屏2列，大屏3列 */
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
+
 .table-seat {
   background: #1f2937;
   border: 2px solid #374151;
   border-radius: 10px;
-  padding: 12px;
+  padding: var(--spacing-sm);
   text-align: center;
-  font-size: 14px;
+  font-size: var(--font-size-xs);
   transition: all 0.3s ease;
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .seat-current {
   border-color: #fbbf24;
@@ -1057,14 +1157,21 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
+
+.table-seat .player-name {
+  font-size: var(--font-size-xs);
+  font-weight: bold;
+}
+
 .dealer-btn {
   background: #fbbf24;
   color: black;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
 }
 /* 盲注徽章样式 */
@@ -1103,62 +1210,130 @@ body {
   color: #6b7280;
 }
 
-/* 操作面板 */
+/* ========================================
+   操作面板 - 移动端优化
+   ======================================== */
 .action-panel {
-  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-  border: 2px solid #4ade80;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
-  animation: action-panel-glow 2s infinite;
+  background: rgba(31, 41, 55, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 20px;
+  padding: var(--spacing-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
-@keyframes action-panel-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); }
-  50% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.5); }
-}
+
 .action-info {
   display: flex;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: #9ca3af;
 }
+
 .turn-indicator {
   color: #4ade80;
   font-weight: bold;
-  animation: blink 1s infinite;
+  animation: blink 1.5s infinite;
 }
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.btn-fold { background: #6b7280; color: white; }
-.btn-fold:hover { background: #4b5563; }
-.btn-check { background: #3b82f6; color: white; }
-.btn-check:hover { background: #2563eb; }
-.btn-call { background: #10b981; color: white; }
-.btn-call:hover { background: #059669; }
-.btn-raise { background: #8b5cf6; color: white; }
-.btn-raise:hover { background: #7c3aed; }
-.btn-allin { background: linear-gradient(135deg, #ef4444, #f97316); color: white; }
-.btn-allin:hover { transform: scale(1.05); }
 
-.raise-group {
+/* 操作按钮容器 */
+.action-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+/* 加注区域 - 顶部满宽 */
+.raise-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: var(--spacing-sm);
+}
+
+.raise-slider-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-md);
 }
+
 .raise-slider {
-  width: 100px;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  appearance: none;
+  cursor: pointer;
 }
-.raise-value {
-  min-width: 50px;
-  text-align: center;
+
+.raise-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  border: 2px solid white;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+
+.raise-value-display {
+  min-width: 60px;
+  text-align: right;
   color: #fbbf24;
-  font-weight: bold;
+  font-weight: 800;
+  font-size: var(--font-size-lg);
+}
+
+/* 统一按钮样式 */
+.action-btn {
+  height: 50px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: var(--font-size-md);
+  border: none;
+  transition: transform 0.1s, opacity 0.2s;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px; /* 增加内边距 */
+  white-space: nowrap; /* 不换行 */
+  overflow: hidden; /* 溢出隐藏 */
+  text-overflow: ellipsis; /* 溢出显示省略号 */
+}
+
+/* 针对移动端长文本，稍微缩小字体 */
+@media (max-width: 400px) {
+  .action-btn {
+    font-size: 13px;
+  }
+}
+
+.action-btn:active {
+  transform: scale(0.96);
+}
+
+.btn-fold { background: #4b5563; }
+.btn-check { background: #3b82f6; }
+.btn-call { background: #10b981; }
+.btn-raise { background: #8b5cf6; }
+.btn-allin { 
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  /* 移除 grid-column: span 2，让它和加注并排 */
+}
+
+/* 如果只有三个按钮（加注不可用），全押占满一整行以保持平衡 */
+/* 只有当全押是第 3 个且是最后一个时才 span 2 */
+.action-buttons-grid > .btn-allin:nth-child(3):last-child {
+  grid-column: span 2;
 }
 
 .waiting-hint {
@@ -1168,41 +1343,49 @@ body {
   font-style: italic;
 }
 
-/* 倒计时进度条 */
+/* ========================================
+   倒计时进度条 - 响应式
+   ======================================== */
 .countdown-bar {
-  height: 8px;
+  height: 10px; /* 增加高度 */
   background: #374151;
-  border-radius: 4px;
+  border-radius: 5px;
   overflow: hidden;
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
 }
+
 .countdown-progress {
   height: 100%;
   background: linear-gradient(90deg, #4ade80, #22c55e);
   transition: width 0.1s linear;
-  border-radius: 4px;
+  border-radius: 5px;
 }
+
 .countdown-danger {
   background: linear-gradient(90deg, #ef4444, #dc2626) !important;
   animation: pulse-danger 0.5s infinite;
 }
+
 @keyframes pulse-danger {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+
 .countdown-text {
   position: absolute;
-  right: 8px;
+  right: var(--spacing-sm);
   top: 50%;
   transform: translateY(-50%);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: bold;
   color: white;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-/* Showdown 弹窗 */
+/* ========================================
+   Showdown 弹窗 - 移动端优化
+   ======================================== */
 .showdown-overlay {
   position: fixed;
   inset: 0;
@@ -1212,18 +1395,25 @@ body {
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.3s ease;
+  /* 移动端优化：支持滚动 */
+  overflow-y: auto;
+  padding: var(--spacing-md);
 }
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
 .showdown-modal {
   background: linear-gradient(135deg, #1f2937, #111827);
-  padding: 32px;
-  border-radius: 20px;
+  padding: var(--spacing-2xl);
+  padding-top: calc(var(--spacing-2xl) + var(--safe-area-top));
+  padding-bottom: calc(var(--spacing-2xl) + var(--safe-area-bottom));
+  border-radius: 16px;
   text-align: center;
   max-width: 90%;
-  min-width: 300px;
+  min-width: 280px;
   border: 2px solid #fbbf24;
   box-shadow: 0 0 40px rgba(251, 191, 36, 0.3);
   animation: slideUp 0.3s ease;
@@ -1233,24 +1423,49 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 .showdown-title {
-  font-size: 28px;
-  margin-bottom: 24px;
+  font-size: clamp(20px, 5vw, 28px);
+  margin-bottom: var(--spacing-lg);
   color: #fbbf24;
 }
+
 .winner-section {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-lg);
 }
+
+.showdown-community {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+}
+
+.showdown-community-label {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: var(--spacing-sm);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.showdown-community-cards {
+  display: flex;
+  gap: var(--spacing-xs);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .winner-card {
   background: linear-gradient(135deg, #fbbf24, #f59e0b);
   color: #1a1a2e;
-  padding: 16px 24px;
+  padding: var(--spacing-md) var(--spacing-lg);
   border-radius: 12px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
   animation: winnerPop 0.5s ease;
+  flex-wrap: wrap;
 }
 @keyframes winnerPop {
   0% { transform: scale(0.8); opacity: 0; }
@@ -1259,43 +1474,45 @@ body {
 }
 .winner-name {
   font-weight: bold;
-  font-size: 18px;
+  font-size: var(--font-size-lg);
 }
+
 .winner-hand {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   opacity: 0.8;
 }
+
 .winner-amount {
-  font-size: 24px;
+  font-size: var(--font-size-xl);
   font-weight: bold;
   color: #166534;
 }
 .showdown-cards {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
   border-top: 1px solid #374151;
 }
+
 .player-showdown {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
 }
+
 .player-showdown-name {
-  min-width: 80px;
+  min-width: 60px;
   text-align: right;
   font-weight: 500;
   color: #9ca3af;
+  font-size: var(--font-size-sm);
 }
+
 .cards-row {
   display: flex;
-  gap: 6px;
-}
-.card-small {
-  width: 40px;
-  height: 56px;
-  font-size: 16px;
+  gap: 4px;
 }
 .next-round-hint {
   margin-top: 20px;
@@ -1310,31 +1527,36 @@ body {
   width: 100%;
 }
 
-/* Ready 面板样式 */
+/* ========================================
+   Ready 面板 - 移动端优化
+   ======================================== */
 .ready-panel {
   background: rgba(31, 41, 55, 0.95);
   border-radius: 16px;
-  padding: 24px;
-  margin: 20px auto;
+  padding: var(--spacing-2xl);
+  margin: var(--spacing-lg) auto;
   max-width: 400px;
   text-align: center;
 }
+
 .ready-title {
-  font-size: 20px;
-  margin-bottom: 20px;
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-lg);
 }
 .ready-players {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
+
 .ready-player {
   display: flex;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: 8px;
   background: #374151;
+  font-size: var(--font-size-sm);
 }
 .ready-yes {
   background: rgba(34, 197, 94, 0.2);
@@ -1365,13 +1587,15 @@ body {
   font-style: italic;
 }
 
-/* Debug 按钮和面板 */
+/* ========================================
+   Debug 按钮和面板 - 移动端优化
+   ======================================== */
 .debug-btn {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(20px + var(--safe-area-bottom));
   right: 20px;
-  width: 40px;
-  height: 40px;
+  width: 44px; /* 增加触摸区域 */
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: #374151;
@@ -1381,19 +1605,23 @@ body {
   opacity: 0.6;
   transition: opacity 0.2s;
 }
+
 .debug-btn:hover {
   opacity: 1;
 }
+
 .debug-panel {
   position: fixed;
-  bottom: 70px;
+  bottom: calc(70px + var(--safe-area-bottom));
   right: 20px;
   background: #1f2937;
   border: 1px solid #374151;
   border-radius: 12px;
-  padding: 16px;
-  min-width: 200px;
+  padding: var(--spacing-md);
+  min-width: 180px;
+  max-width: 280px;
   z-index: 1000;
+  font-size: var(--font-size-xs);
 }
 .debug-panel h4 {
   margin-bottom: 12px;
@@ -1414,25 +1642,29 @@ body {
   font-size: 12px;
 }
 
-/* 房间页 Ready 样式 */
+/* ========================================
+   房间页 Ready 样式 - 移动端优化
+   ======================================== */
 .ready-section {
   text-align: center;
-  padding: 20px;
+  padding: var(--spacing-lg);
 }
+
 .ready-players-room {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
   flex-wrap: wrap;
 }
+
 .ready-player-badge {
-  padding: 8px 16px;
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: 20px;
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 .ready-player-badge.ready-yes {
   background: rgba(34, 197, 94, 0.2);

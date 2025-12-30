@@ -504,7 +504,7 @@ function handleActionResult(room: Room, result: ReturnType<typeof gameController
  * 结束当前手牌
  */
 function endCurrentHand(room: Room): void {
-    const { result, gameEnded } = gameController.endHand(room);
+    const { result, gameEnded, eliminatedPlayers } = gameController.endHand(room);
 
     // 广播手牌结果
     io.to(room.id).emit(ServerEvent.HAND_RESULT, {
@@ -512,6 +512,47 @@ function endCurrentHand(room: Room): void {
         stateVersion: room.gameState!.stateVersion,
         handId: room.gameState!.handId
     });
+
+    // 处理被淘汰的玩家（筹码为 0）
+    for (const eliminated of eliminatedPlayers) {
+        // 先获取玩家对象以获取 socketId，因为 forceRemovePlayer 会销毁它
+        const playerObj = room.players.get(eliminated.playerId);
+        const targetSocketId = playerObj?.socketId;
+
+        // 使用 forceRemovePlayer 强制移除被淘汰的玩家
+        const removeResult = roomManager.forceRemovePlayer(eliminated.playerId);
+
+        if (removeResult && !removeResult.shouldDestroyRoom) {
+            console.log(`[Socket] 玩家 ${eliminated.nickname} 筹码为 0，已自动出局`);
+
+            // 通知被踢出的玩家 (使用正确的 socketId)
+            if (targetSocketId) {
+                const socket = io.sockets.sockets.get(targetSocketId);
+                if (socket) {
+                    socket.emit(ServerEvent.ERROR, {
+                        code: 'ELIMINATED',
+                        message: '您的筹码已输光，已自动离开房间。'
+                    });
+                    socket.leave(room.id);
+                }
+            }
+
+            // 如果房主被淘汰，通知所有玩家房主已转移
+            if (eliminated.wasHost && removeResult.newHostId) {
+                const newHost = room.players.get(removeResult.newHostId);
+                if (newHost) {
+                    io.to(room.id).emit(ServerEvent.HOST_TRANSFERRED, {
+                        newHostId: removeResult.newHostId,
+                        newHostNickname: newHost.nickname
+                    });
+                    console.log(`[Socket] 房主 ${eliminated.nickname} 出局，房主转移给 ${newHost.nickname}`);
+                }
+            }
+        }
+    }
+
+    // 广播更新后的房间状态
+    broadcastRoomState(room, ServerEvent.ROOM_UPDATED);
 
     if (gameEnded) {
         // 游戏结束
