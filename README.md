@@ -14,29 +14,53 @@
 
 ```
 pocket-holdem-mvp/
-├── server/                     # 服务端 (Node.js + Socket.io)
+├── server/                           # 服务端 (Node.js + Socket.io)
 │   └── src/
-│       ├── index.ts            # Socket.io 入口与事件处理
-│       ├── RoomManager.ts      # 房间生命周期管理
-│       ├── GameController.ts   # 手牌流程与下注轮控制
-│       ├── PokerEngine.ts      # 核心扑克逻辑
-│       ├── Player.ts           # 玩家状态封装
-│       └── Interfaces.ts       # 类型定义
-├── client/                     # 客户端 (Vite + Vue3)
+│       ├── index.ts                  # Socket.io 入口与事件处理
+│       ├── RoomManager.ts            # 房间生命周期管理
+│       ├── GameController.ts         # 手牌流程与下注轮控制
+│       ├── PokerEngine.ts            # 核心扑克逻辑 (牌面评估/比较)
+│       ├── Player.ts                 # 玩家状态封装
+│       ├── Interfaces.ts             # 类型定义
+│       ├── poker.test.ts             # 核心逻辑单元测试
+│       ├── poker.showdown.test.ts    # Showdown 结算测试
+│       └── simulation.ts             # 模拟对局脚本
+│
+├── client/                           # Web 客户端 (Vite + Vue3 + Tailwind)
 │   ├── src/
-│   │   ├── App.vue             # 主应用入口
+│   │   ├── App.vue                   # 主应用入口
+│   │   ├── main.ts                   # Vue 应用入口
+│   │   ├── style.css                 # 全局样式
 │   │   ├── components/
-│   │   │   ├── ActionPanel.vue # 操作面板（Fold/Check/Call/Raise）
-│   │   │   ├── CardDisplay.vue # 扑克牌显示组件
-│   │   │   ├── PokerTable.vue  # 牌桌布局组件
-│   │   │   └── PlayerSeat.vue  # 玩家座位组件
+│   │   │   ├── ActionPanel.vue       # 操作面板 (Fold/Check/Call/Raise)
+│   │   │   ├── CardDisplay.vue       # 扑克牌显示组件
+│   │   │   ├── PokerTable.vue        # 牌桌布局组件
+│   │   │   └── PlayerSeat.vue        # 玩家座位组件
 │   │   ├── composables/
-│   │   │   └── useSocket.ts    # Socket 连接管理
+│   │   │   └── useSocket.ts          # Socket 连接管理 & 状态同步
 │   │   ├── store/
-│   │   │   └── gameStore.ts    # Pinia 状态管理
-│   │   └── types/index.ts      # 类型定义
-│   └── public/assets/imgs/     # SVG 扑克牌资源
-├── docs/                       # 系统文档
+│   │   │   └── gameStore.ts          # Pinia 状态管理
+│   │   └── types/
+│   │       └── index.ts              # 共享类型定义
+│   └── public/assets/imgs/           # SVG 扑克牌资源
+│
+├── minigame/                         # 微信小游戏客户端 (开发中)
+│   ├── js/                           # 游戏核心逻辑
+│   ├── images/                       # 扑克牌图片资源
+│   ├── audio/                        # 音效资源
+│   ├── game.js                       # 游戏主入口
+│   ├── game.json                     # 小游戏配置
+│   └── project.config.json           # 微信开发者工具配置
+│
+├── docs/                             # 技术文档
+│   ├── architecture-lite.md          # 轻量架构设计
+│   ├── websocket-protocol.md         # WebSocket 协议规范
+│   ├── showdown-logic.md             # Showdown 结算逻辑
+│   ├── room-governance.md            # 房间治理规则
+│   ├── ngrok-guide.md                # ngrok 内网穿透指南
+│   └── ...                           # 更多文档
+│
+├── CLAUDE.md                         # AI 助手上下文说明
 └── README.md
 ```
 
