@@ -333,7 +333,7 @@ onUnmounted(() => {
     <!-- 首页 -->
     <div v-if="currentView === 'home'" class="home-page">
       <h1>🎰 Pocket Holdem</h1>
-      <p class="subtitle">朋友局德州扑克</p>
+      <p class="subtitle">朋友局记分牌</p>
       
       <div class="form-group">
         <input 

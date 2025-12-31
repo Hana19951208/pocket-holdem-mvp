@@ -1,7 +1,7 @@
 
 ---
 
-# Pocket Holdem --- 朋友局德州扑克系统 PRD (MVP)
+# Pocket Holdem --- 朋友局记分牌系统 PRD (MVP)
 
 ## 一、 产品 PRD (Product Requirement Document)
 
