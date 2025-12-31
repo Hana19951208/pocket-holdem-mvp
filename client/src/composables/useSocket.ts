@@ -373,7 +373,35 @@ export const useSocket = () => {
             action,
             amount,
             roundIndex: room.value?.gameState?.roundIndex || 0,
-            requestId: crypto.randomUUID()
+            requestId: generateUUID()
+        });
+    };
+
+    /**
+     * 生成 UUID (兼容非安全上下文)
+     */
+    const generateUUID = () => {
+        // 1. 优先使用标准 API (仅在 HTTPS/Localhost 可用)
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+
+        // 2. 尝试使用 getRandomValues (支持非安全上下文的现代浏览器)
+        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+            try {
+                return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+                    (parseInt(c) ^ crypto!.getRandomValues(new Uint8Array(1))[0] & 15 >> parseInt(c) / 4).toString(16)
+                );
+            } catch (e) {
+                console.warn('[UUID] getRandomValues failed, falling back to Math.random');
+            }
+        }
+
+        // 3. 兜底方案 (纯数学随机，足够用于请求 ID)
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
         });
     };
 
