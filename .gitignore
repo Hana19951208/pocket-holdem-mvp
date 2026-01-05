@@ -34,3 +34,6 @@ Thumbs.db
 .gemini/
 brain/
 artifacts/
+.agent/
+.shared/
+.claude/
